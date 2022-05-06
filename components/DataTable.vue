@@ -8,26 +8,46 @@
     template(
       v-slot:top
     )
-      v-form(
-        @submit.prevent="executeSearch"
-        v-if="searchable"
-      )
-        div.d-flex.align-center.mx-4.py-4
-          v-text-field(
-            v-model="search"
-            :label="searchPlaceholder"
-            outlined
+      v-row
+        v-col(cols="12" md="4" v-if="sortable")
+          v-select(
             dense
-            clearable
+            outlined
             hide-details
-            prepend-inner-icon="mdi-magnify"
-          ).search-field.mr-4
-          v-btn(
-            type="submit"
-            color="primary"
-            :style="{height: '40px'}"
+            :items="extendedSortOptions"
+            item-value="value"
+            label="Sort By"
+            v-model="activeSortOption"
+            @change="onSortOptionChange"
+          ).sort-field.px-4
+            template(v-slot:selection="{item}")
+              | {{item.text}}
+              v-icon(v-if="item.direction" :title="item.direction").ml-2
+                | {{`mdi-sort-${item.direction}`}}
+            template(v-slot:item="{item}")
+              v-icon(v-if="item.direction" :title="item.direction").mr-2
+                | {{`mdi-sort-${item.direction}`}}
+              | {{item.text}}
+        v-col(cols="12" md="8"  v-if="searchable")
+          v-form(
+            @submit.prevent="executeSearch"
           )
-            | Search
+            div.d-flex.align-center.px-4
+              v-text-field(
+                v-model="search"
+                :label="searchPlaceholder"
+                outlined
+                dense
+                clearable
+                hide-details
+                prepend-inner-icon="mdi-magnify"
+              ).search-field.mr-4
+              v-btn(
+                type="submit"
+                color="primary"
+                :style="{height: '40px'}"
+              )
+                | Search
 
     template(
       v-slot:body.prepend
@@ -91,6 +111,10 @@ export default {
       type: Array,
       required: true
     },
+    sortable: {
+      type: Boolean,
+      default: false
+    },
     searchable: {
       type: Boolean,
       default: false
@@ -116,6 +140,14 @@ export default {
       default: false
     },
     /**
+     * Options for 'Sorted by' Select
+     * Each item should contain 'text' and 'value'
+     */
+    sortOptions: {
+      type: Array,
+      default: () => []
+    },
+    /**
      * Filters for each column in the table
      * Each item should contain 'name' corresponding to the 'text' in headers
      * Additionally 'type' and 'label' can be specified
@@ -128,7 +160,8 @@ export default {
   data() {
     return {
       search: '',
-      filtersValues: {}
+      filtersValues: {},
+      activeSortOption: {text: 'Default', value: false}
     }
   },
   computed: {
@@ -184,6 +217,20 @@ export default {
           filter: filterFunction
         }
       })
+    },
+    /**
+     * Extend sort options with Asc and Desc properties
+     *
+     */
+    extendedSortOptions () {
+      const options = [{text: 'Default', value: false}]
+      const directions = ['ascending', 'descending']
+      for (const {text, value} of this.sortOptions) {
+        for (const direction of directions) {
+          options.push({text, value: {field: value, direction }, direction})
+        }
+      }
+      return options
     }
   },
   methods: {
@@ -200,6 +247,13 @@ export default {
      */
     executeSearch() {
       this.$emit('update-search', this.search)
+    },
+    /**
+     * Gets called when the user change option in 'Sort by' select
+     *
+     */
+    onSortOptionChange(option) {
+      this.$emit('update-sort', option)
     }
   }
 }
@@ -209,6 +263,6 @@ export default {
 .v-data-table
   max-width: 100%
 
-.search-field
+.search-field, .sort-field
   max-width: 500px
 </style>
