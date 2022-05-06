@@ -3,9 +3,20 @@
     v-row
       v-col(cols)
         DataTable(
-          v-if="items.length"
+          v-if="!isInitialLoading"
           :headers="headers"
           :items="items"
+          :filters="filters"
+          disable-sort
+          searchable
+          dense
+          :loading="isLoading"
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :total-pages="totalPages"
+          use-server-pagination
+          @change-page="onPageChange"
+          @update-search="onSearchUpdate"
         )
         v-progress-circular(
           v-else
@@ -25,29 +36,91 @@ export default {
   },
   data() {
     return {
+      totalItems: 0,
+      totalPages: 0,
+      currentPage: 1,
+      perPage: 10,
+      searchParam: '',
       sales,
+      isInitialLoading: true,
+      isLoading: false,
       items: [],
       headers: [
-        { text: 'Name', value: 'user', align: 'start' },
+        { text: 'Name', value: 'fullName', align: 'start' },
         { text: 'Email', value: 'email' },
         { text: 'Gender', value: 'gender' },
         { text: 'Year', value: 'year' },
         { text: 'Sales', value: 'sales' },
         { text: 'Country', value: 'country' },
       ],
+      filters: [
+        {name: 'Name', type: 'includes', label: 'Name'},
+        {name: 'Country', type: 'exact'}, // label will be the same as type if not defined
+        {name: 'Sales', type: 'more', label: 'More Than:'},
+        {name: 'Gender'}, // the type by default equals 'includes'
+        {name: 'Year', type: 'less', label: 'Less than:'}
+      ]
     }
   },
   async created() {
-    this.items = await this.fetchData(0, 50)
+    await this.updateItems(this.currentPage)
+    this.isInitialLoading = false
   },
   methods: {
-    async fetchData(page, size) {
-      const start = page * size
+    async updateItems (page) {
+      const { items, totalItems, totalPages } = await this.fetchData(page, this.perPage, this.searchParam)
+      this.items = items
+      this.totalPages = totalPages
+      this.totalItems = totalItems
+    },
+    async fetchData(page, size, search = '') {
+      this.isLoading = true
+      // Pages start from 1, but indexes from 0
+      const start = (page - 1) * size
       await this.delay(3000)
-      return await sales.results.slice(start, start + size)
+      const selection = search ? this.filterArrayByValue(sales.results, search) : this.sales.results
+      const response = await selection.slice(start, start + size)
+      const items = response.map(el => {
+        const {first_name, last_name, title} = el.user
+        // For correct displaying user object in the table
+        return {
+          ...el,
+          fullName: `${title} ${first_name} ${last_name}`
+        }
+      })
+      const totalItems = selection.length
+      this.isLoading = false
+      // Extend response with pagination data
+      return {
+        items,
+        totalItems: totalItems,
+        totalPages: Math.ceil(totalItems / size)
+      }
     },
     delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms))
+    },
+    // Imitation for searching in database
+    filterArrayByValue(array, string) {
+      const filterObject = (object, str) => {
+        return Object.keys(object).some(key => {
+          const el = object[key]
+          if (typeof el !== 'object') return el.toLocaleString().toLowerCase().includes(str.toLowerCase())
+          return filterObject(el, str)
+        })
+      }
+      return array.filter(object => filterObject(object, string))
+    },
+    async onPageChange (newPage) {
+      this.currentPage = newPage
+      await this.updateItems(newPage)
+    },
+    async onSearchUpdate (searchValue) {
+      if (searchValue === this.searchParam) return
+      // If search param was changed always start from 1 page
+      this.searchParam = searchValue
+      this.currentPage = 1
+      await this.updateItems(this.currentPage)
     }
   }
 }
