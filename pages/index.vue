@@ -31,7 +31,8 @@
 
 <script>
 import DataTable from '~/components/DataTable.vue'
-import sales from '~/api/sales.js'
+import ItemsService from "~/api/items.service";
+
 
 export default {
   components: {
@@ -45,7 +46,6 @@ export default {
       perPage: 10,
       searchParam: '',
       sortOption: false,
-      sales,
       isInitialLoading: true,
       isLoading: false,
       items: [],
@@ -77,75 +77,12 @@ export default {
   },
   methods: {
     async updateItems (page) {
-      const { items, totalItems, totalPages } = await this.fetchData(page, this.perPage, this.searchParam, this.sortOption)
+      this.isLoading = true
+      const { items, totalItems, totalPages } = await ItemsService.fetch(page, this.perPage, this.searchParam, this.sortOption)
       this.items = items
       this.totalPages = totalPages
       this.totalItems = totalItems
-    },
-    async fetchData(page, size, search = '', sortOption = false) {
-      this.isLoading = true
-      // Pages start from 1, but indexes from 0
-      const start = (page - 1) * size
-      await this.delay(3000)
-      const selection = search ? this.filterArrayByValue(sales.results, search) : [...this.sales.results]
-      if (sortOption) selection.sort(this.sortByOption(sortOption))
-      const response = await selection.slice(start, start + size)
-      const items = response.map(el => {
-        const {first_name, last_name, title} = el.user
-        // For correct displaying user object in the table
-        return {
-          ...el,
-          fullName: `${title} ${first_name} ${last_name}`
-        }
-      })
-      const totalItems = selection.length
       this.isLoading = false
-      // Extend response with pagination data
-      return {
-        items,
-        totalItems: totalItems,
-        totalPages: Math.ceil(totalItems / size)
-      }
-    },
-    delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms))
-    },
-    // Imitation for searching in database
-    filterArrayByValue(array, string) {
-      const filterObject = (object, str) => {
-        return Object.keys(object).some(key => {
-          const el = object[key]
-          if (typeof el !== 'object') return el.toLocaleString().toLowerCase().includes(str.toLowerCase())
-          return filterObject(el, str)
-        })
-      }
-      return array.filter(object => filterObject(object, string))
-    },
-    sortByOption({field, direction}) {
-      // field can be simple /'name'/ and complex /'user.name'/
-      const keys = field.split('.')
-
-      // Extract values from nested object
-      const getValue = (obj, keysArray) => {
-        let result = obj
-        for (const key of keysArray) {
-          result = result[key]
-        }
-        // For compare strings regardless of casing
-        return typeof result === 'string' ? result.toLowerCase() : result
-      }
-      return function(a, b) {
-        const first = getValue(a, keys)
-        const second = getValue(b, keys)
-        if (direction === 'ascending') {
-          if (first < second) return -1;
-          if (first > second) return 1;
-        } else {
-          if (first > second) return -1;
-          if (first < second) return 1;
-        }
-        return 0;
-      }
     },
     async onPageChange (newPage) {
       this.currentPage = newPage
